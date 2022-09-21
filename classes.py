@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 from exceptions import SignatureError
 
@@ -8,16 +9,16 @@ class HeaderData:
     """Датакласс для хранения данных заголовка"""
     signature = 'echo'
     filename = 'ottisk'
+    archive_filename = 'archive'
     int_version = 1
 
     hex_signature = bytes(str.encode(signature)).hex()
 
     version = '0001'
     algorithms = bytes(5).hex()
-    size = '0100'
     hex_filename = bytes(str.encode(filename)).hex()
 
-    header = hex_signature + version + algorithms + size + hex_filename
+    header = hex_signature + version + algorithms + hex_filename
 
 
 class Coder:
@@ -32,23 +33,47 @@ class Coder:
             text = input_file.read().hex()
             return text
 
-    def codefile(self, filename: str) -> None:
+    def code_file(self, filename: str) -> None:
         """
         Функция для кодирования файла.
         :param filename: название файла
         """
         file_type = filename.split('.')[-1]
         hex_file_type = bytes(str.encode(file_type)).hex()
-        result = HeaderData.header + hex_file_type + self.readfile(filename)
+        file_data = self.readfile(filename)
+        file_size = format(len(file_data) // 2, 'x')
+        hex_file_size = '0' * (4 - len(file_size)) + file_size
+        result = HeaderData.header + hex_file_size + hex_file_type + file_data
         self.savefile(result)
 
-    def savefile(self, text: str) -> None:
+    def savefile(self, text: str, many: bool = False) -> None:
         """
         Функция для сохранения закодированного файла.
-        :param text: 16-ричный текст для записи
+        :param text: 16-ричный текст для записи,
+        :param many: True - создается архив для нескольких файлов
         """
-        with open(f'{HeaderData.filename}.{HeaderData.signature}', 'wb') as output_file:
-            output_file.write(bytes.fromhex(text))
+        if many:
+            with open(f'{HeaderData.archive_filename}.{HeaderData.signature}', 'wb') as output_file:
+                output_file.write(bytes.fromhex(text))
+        else:
+            with open(f'{HeaderData.filename}.{HeaderData.signature}', 'wb') as output_file:
+                output_file.write(bytes.fromhex(text))
+
+    def code_files(self, filenames: List[str]) -> None:
+        """
+        Функция для кодирования нескольких файлов.
+        :param filenames: название файлов
+        """
+        result = HeaderData.header
+        for filename in filenames:
+            file_type = filename.split('.')[-1]
+            hex_file_type = bytes(str.encode(file_type)).hex()
+            file_data = self.readfile(filename)
+            file_size = format(len(file_data) // 2, 'x')
+            hex_file_size = '0' * (4 - len(file_size)) + file_size
+            result += hex_file_size + hex_file_type + file_data
+
+        self.savefile(result, many=True)
 
 
 class Decoder:
@@ -81,11 +106,35 @@ class Decoder:
         """
         text = self.readfile(filename)
         if text.startswith(HeaderData.hex_signature):
-            hex_filetype = text[len(HeaderData.header):len(HeaderData.header)+6]
+            hex_filetype = text[len(HeaderData.header) + 4:len(HeaderData.header)+10]
             filetype = bytes.fromhex(hex_filetype).decode(encoding='utf-8')
-            result = text[len(HeaderData.header) + 6:]
+            result = text[len(HeaderData.header) + 10:]
 
             self.savefile(filename, result, filetype)
         
+        else:
+            raise SignatureError()
+
+    def decode_files(self, filename: str) -> None:
+        """
+        Функция для декодироваия файла.
+        :param filename: название файла
+        """
+        text = self.readfile(filename)
+        if text.startswith(HeaderData.hex_signature):
+            ptr = len(HeaderData.header)
+            data = text[ptr:]
+            ind = 1
+            while data:
+                file_size = int(text[ptr:ptr + 4],  16) * 2
+                hex_filetype = text[ptr + 4:ptr + 10]
+                filetype = bytes.fromhex(hex_filetype).decode(encoding='utf-8')
+                result = text[ptr + 10: ptr + 10 + file_size]
+                self.savefile(f'file{ind}', result, filetype)
+
+                ptr = ptr + 10 + file_size
+                data = text[ptr:]
+                ind +=  1
+
         else:
             raise SignatureError()
