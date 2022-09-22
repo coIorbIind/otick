@@ -42,7 +42,7 @@ class Coder:
         hex_file_type = bytes(str.encode(file_type)).hex()
         file_data = self.readfile(filename)
         file_size = format(len(file_data) // 2, 'x')
-        hex_file_size = '0' * (4 - len(file_size)) + file_size
+        hex_file_size = '0' * (6 - len(file_size)) + file_size
         result = HeaderData.header + hex_file_size + hex_file_type + file_data
         self.savefile(result)
 
@@ -70,7 +70,7 @@ class Coder:
             hex_file_type = bytes(str.encode(file_type)).hex()
             file_data = self.readfile(filename)
             file_size = format(len(file_data) // 2, 'x')
-            hex_file_size = '0' * (4 - len(file_size)) + file_size
+            hex_file_size = '0' * (6 - len(file_size)) + file_size
             result += hex_file_size + hex_file_type + file_data
 
         self.savefile(result, many=True)
@@ -106,9 +106,9 @@ class Decoder:
         """
         text = self.readfile(filename)
         if text.startswith(HeaderData.hex_signature):
-            hex_filetype = text[len(HeaderData.header) + 4:len(HeaderData.header)+10]
+            hex_filetype = text[len(HeaderData.header) + 6:len(HeaderData.header)+12]
             filetype = bytes.fromhex(hex_filetype).decode(encoding='utf-8')
-            result = text[len(HeaderData.header) + 10:]
+            result = text[len(HeaderData.header) + 12:]
 
             self.savefile(filename, result, filetype)
         
@@ -126,15 +126,15 @@ class Decoder:
             data = text[ptr:]
             ind = 1
             while data:
-                file_size = int(text[ptr:ptr + 4],  16) * 2
-                hex_filetype = text[ptr + 4:ptr + 10]
+                file_size = int(text[ptr:ptr + 6],  16) * 2
+                hex_filetype = text[ptr + 6:ptr + 12]
                 filetype = bytes.fromhex(hex_filetype).decode(encoding='utf-8')
-                result = text[ptr + 10: ptr + 10 + file_size]
+                result = text[ptr + 12: ptr + 12 + file_size]
                 self.savefile(f'file{ind}', result, filetype)
 
-                ptr = ptr + 10 + file_size
+                ptr = ptr + 12 + file_size
                 data = text[ptr:]
-                ind +=  1
+                ind += 1
 
         else:
             raise SignatureError()
