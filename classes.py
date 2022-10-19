@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import List
+import json
 
-from exceptions import SignatureError
+from exceptions import SignatureError, AlgorithmError
+from shennon_fano import ShennonFano
 
 
 @dataclass
@@ -20,9 +22,14 @@ class HeaderData:
 
     header = hex_signature + version + algorithms + hex_filename
 
+    @staticmethod
+    def recalculate_header():
+        HeaderData.header = HeaderData.hex_signature + HeaderData.version + HeaderData.algorithms + HeaderData.hex_filename
+
 
 class Coder:
     """Класс кодера"""
+
     def readfile(self, filename: str) -> str:
         """
         Функция для считывая файла.
@@ -75,9 +82,42 @@ class Coder:
 
         self.savefile(result, many=True)
 
+    def shennon_fano_code(self, filename: str) -> None:
+        """
+        Функция для кодирования текста файла алгоритмом Шеннона-Фано.
+        :param filename: название файла
+        """
+        HeaderData.algorithms = '0000000001'
+        HeaderData.version = '0010'
+        HeaderData.recalculate_header()
+        file_type = filename.split('.')[-1]
+        hex_file_type = bytes(str.encode(file_type)).hex()
+        with open(filename) as file:
+            data = file.read()
+
+        shennon_coder = ShennonFano()
+        frequencies = shennon_coder.count_frequencies(data)
+        print(frequencies)
+        shennon_coder.coding(frequencies)
+        for char, code in shennon_coder.result.items():
+            print(f'{char}: {code}')
+
+        hex_codes = bytes(str.encode(json.dumps(shennon_coder.result))).hex()
+
+        text = ''
+        for char in data:
+            text += shennon_coder.result[char]
+
+        file_size = format(len(text), 'x')
+        hex_file_size = '0' * (6 - len(file_size)) + file_size
+        result = HeaderData.header + hex_file_size + hex_file_type + hex_codes + text
+        print(result)
+        self.savefile(result)
+
 
 class Decoder:
     """Класс декодера"""
+
     def readfile(self, filename: str) -> str:
         """
         Функция для считывая файла.
@@ -101,19 +141,37 @@ class Decoder:
 
     def decode(self, filename: str) -> None:
         """
-        Функция для декодироваия файла.
+        Функция для запуска подходящей декодировки файла.
         :param filename: название файла
         """
         text = self.readfile(filename)
         if text.startswith(HeaderData.hex_signature):
-            hex_filetype = text[len(HeaderData.header) + 6:len(HeaderData.header)+12]
+            hex_filetype = text[len(HeaderData.header) + 6:len(HeaderData.header) + 12]
+            algorithms = text[len(HeaderData.hex_signature + HeaderData.version):
+                              len(HeaderData.hex_signature + HeaderData.version) + 10]
             filetype = bytes.fromhex(hex_filetype).decode(encoding='utf-8')
-            result = text[len(HeaderData.header) + 12:]
+
+            if algorithms == '0' * 10:
+                result = text[len(HeaderData.header) + 12:]
+
+            elif algorithms == '0' * 9 + '1':
+                result = bytes(str.encode(self.shennon_fano_decode(text))).hex()
+
+            else:
+                raise AlgorithmError()
 
             self.savefile(filename, result, filetype)
-        
         else:
             raise SignatureError()
+
+    def shennon_fano_decode(self, text: str) -> str:
+        file_size = int(text[len(HeaderData.header):len(HeaderData.header) + 6], 16)
+        str_dict = text[len(HeaderData.header) + 12:-file_size]
+        dct = json.loads(bytes.fromhex(str_dict).decode(encoding='utf-8'))
+        file_data = text[-file_size:]
+        for key in list(dct.keys())[::-1]:
+            file_data = file_data.replace(dct[key], key)
+        return file_data
 
     def decode_files(self, filename: str) -> None:
         """
@@ -126,7 +184,7 @@ class Decoder:
             data = text[ptr:]
             ind = 1
             while data:
-                file_size = int(text[ptr:ptr + 6],  16) * 2
+                file_size = int(text[ptr:ptr + 6], 16) * 2
                 hex_filetype = text[ptr + 6:ptr + 12]
                 filetype = bytes.fromhex(hex_filetype).decode(encoding='utf-8')
                 result = text[ptr + 12: ptr + 12 + file_size]

@@ -2,7 +2,7 @@ import os
 from typing import Tuple
 
 from classes import Coder, Decoder
-from exceptions import SignatureError
+from exceptions import SignatureError, AlgorithmError
 
 
 def create_entities() -> Tuple[Coder, Decoder]:
@@ -17,20 +17,24 @@ def print_menu() -> None:
     """
     Функция для отрисовки меню программы
     """
-    print('Чтобы закодировать файл введите .................1')
-    print('Чтобы декодировать файл введите .................2')
-    print('Чтобы закодировать несколько файлов введите .....3')
-    print('Чтобы декодировать несколько файлов введите .....4')
-    print('-' * 50)
+    print('Чтобы закодировать файл введите ..................................1')
+    print('Чтобы декодировать файл введите ..................................2')
+    print('Чтобы закодировать несколько файлов введите ......................3')
+    print('Чтобы декодировать несколько файлов введите ......................4')
+    print()
+    print('Чтобы закодировать текст файла алгоритмом Шеннона-Фано введите ...5')
+    print('-' * 67)
 
 
 def main():
     coder, decoder = create_entities()
+    # coder.shennon_fano_code('file.txt')
     operations = {
         '1': coder.code_file,
         '2': decoder.decode,
         '3': coder.code_files,
-        '4': decoder.decode_files
+        '4': decoder.decode_files,
+        '5': coder.shennon_fano_code,
     }
     print_menu()
     print('Введите номер операции: ', end='')
@@ -43,7 +47,7 @@ def main():
             break
 
     while True:
-        if operation in ['1', '2', '4']:
+        if operation in ['1', '2', '4', '5']:
             data = input('Введите название файла: ')
             if os.path.exists(data):
                 break
@@ -61,6 +65,9 @@ def main():
         operations[operation](data)
     except SignatureError:
         print('Ошибка сигнатуры')
+
+    except AlgorithmError:
+        print('Ошибка кода алгоритма')
 
 
 if __name__ == '__main__':
