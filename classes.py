@@ -92,7 +92,7 @@ class Coder:
         HeaderData.recalculate_header()
         file_type = filename.split('.')[-1]
         hex_file_type = bytes(str.encode(file_type)).hex()
-        with open(filename) as file:
+        with open(filename, encoding='utf8') as file:
             data = file.read()
 
         shennon_coder = ShennonFano()
@@ -168,10 +168,20 @@ class Decoder:
         file_size = int(text[len(HeaderData.header):len(HeaderData.header) + 6], 16)
         str_dict = text[len(HeaderData.header) + 12:-file_size]
         dct = json.loads(bytes.fromhex(str_dict).decode(encoding='utf-8'))
+        inv_dct = {value: key for key, value in dct.items()}
         file_data = text[-file_size:]
-        for key in list(dct.keys())[::-1]:
-            file_data = file_data.replace(dct[key], key)
-        return file_data
+        ptr = 0
+        code = ''
+        text = ''
+        while ptr != len(file_data):
+            code += file_data[ptr]
+            char = inv_dct.get(code)
+            if char is not None:
+                text += char
+                code = ''
+            ptr += 1
+
+        return text
 
     def decode_files(self, filename: str) -> None:
         """
