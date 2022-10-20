@@ -23,18 +23,19 @@ def print_menu() -> None:
     print('Чтобы декодировать несколько файлов введите ......................4')
     print()
     print('Чтобы закодировать текст файла алгоритмом Шеннона-Фано введите ...5')
+    print('Чтобы закодировать текст файла алгоритмом RLE введите ............6')
     print('-' * 67)
 
 
 def main():
     coder, decoder = create_entities()
-    # coder.shennon_fano_code('file.txt')
     operations = {
         '1': coder.code_file,
         '2': decoder.decode,
         '3': coder.code_files,
         '4': decoder.decode_files,
         '5': coder.shennon_fano_code,
+        '6': coder.rle_code,
     }
     print_menu()
     print('Введите номер операции: ', end='')
@@ -47,7 +48,7 @@ def main():
             break
 
     while True:
-        if operation in ['1', '2', '4', '5']:
+        if operation in ['1', '2', '4', '5', '6']:
             data = input('Введите название файла: ')
             if os.path.exists(data):
                 break

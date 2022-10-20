@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import List
+from collections import defaultdict
 import json
+from string import digits
 
 from exceptions import SignatureError, AlgorithmError
 from shennon_fano import ShennonFano
@@ -97,10 +99,9 @@ class Coder:
 
         shennon_coder = ShennonFano()
         frequencies = shennon_coder.count_frequencies(data)
-        print(frequencies)
         shennon_coder.coding(frequencies)
-        for char, code in shennon_coder.result.items():
-            print(f'{char}: {code}')
+        # for char, code in shennon_coder.result.items():
+        #     print(f'{char}: {code}')
 
         hex_codes = bytes(str.encode(json.dumps(shennon_coder.result))).hex()
 
@@ -111,8 +112,80 @@ class Coder:
         file_size = format(len(text), 'x')
         hex_file_size = '0' * (6 - len(file_size)) + file_size
         result = HeaderData.header + hex_file_size + hex_file_type + hex_codes + text
-        print(result)
         self.savefile(result)
+
+    def rle_code(self, filename: str) -> None:
+        """
+        Функция для кодирования текста файла алгоритмом RLE.
+        :param filename: название файла
+        """
+        HeaderData.algorithms = '0000000010'
+        HeaderData.version = '0010'
+        HeaderData.recalculate_header()
+        file_type = filename.split('.')[-1]
+        hex_file_type = bytes(str.encode(file_type)).hex()
+        with open(filename, encoding='utf8') as file:
+            data = file.read()
+
+        text = ''
+        ptr = 0
+        temp_count = 0
+        previous_char = ''
+        while ptr != len(data):
+            current_char = data[ptr]
+            if current_char == previous_char:
+                temp_count += 1
+            elif temp_count == 0:
+                temp_count = 1
+            else:
+                text += f'{temp_count}{previous_char}'
+                temp_count = 1
+            previous_char = current_char
+            ptr += 1
+        text += f'{temp_count}{previous_char}'
+        print(text)
+        hex_text = bytes(str.encode(text)).hex()
+        print(hex_text)
+        file_size = format(len(text), 'x')
+        hex_file_size = '0' * (6 - len(file_size)) + file_size
+        result = HeaderData.header + hex_file_size + hex_file_type + hex_text
+        self.savefile(result)
+
+        # frequencies = count_frequencies(data)
+        # p = list(frequencies.keys())[-1]
+        # text = ''
+        # ptr = 0
+        # temp_count = 0
+        # previous_char = ''
+        # while ptr != len(data):
+        #     current_char = data[ptr]
+        #     if current_char == previous_char:
+        #         temp_count += 1
+        #     else:
+        #         if temp_count >= 4 or previous_char == p:
+        #             text += f'{p}{temp_count}{previous_char}'
+        #         else:
+        #             text += previous_char * temp_count
+        #         temp_count = 1
+        #     previous_char = current_char
+        #     ptr += 1
+        # if temp_count >= 4 or previous_char == p:
+        #     text += f'{p}{temp_count}{previous_char}'
+        # else:
+        #     text += previous_char * temp_count
+        # hex_text = bytes(str.encode(text)).hex()
+        # file_size = format(len(text), 'x')
+        # hex_file_size = '0' * (6 - len(file_size)) + file_size
+        # result = HeaderData.header + hex_file_size + hex_file_type + hex_text
+        # self.savefile(result)
+
+
+def count_frequencies(text: str) -> dict:
+    frequencies = defaultdict(int)
+    for char in text:
+        frequencies[char] += 1
+    frequencies = dict(sorted(frequencies.items(), key=lambda x: (-x[1], text.find(x[0]))))
+    return frequencies
 
 
 class Decoder:
@@ -157,12 +230,42 @@ class Decoder:
             elif algorithms == '0' * 9 + '1':
                 result = bytes(str.encode(self.shennon_fano_decode(text))).hex()
 
+            elif algorithms == '0000000010':
+                text = text[len(HeaderData.header) + 12:]
+                text = bytes.fromhex(text).decode(encoding='utf-8')
+                result = bytes(str.encode(self.rle_decode(text))).hex()
+
             else:
                 raise AlgorithmError()
 
             self.savefile(filename, result, filetype)
         else:
             raise SignatureError()
+
+    def rle_decode(self, data: str) -> str:
+        frequencies = count_frequencies(data)
+        if not frequencies:
+            return ''
+        # p = list(frequencies.keys())[0]
+        text = ''
+        ptr = 0
+        temp_digits = ''
+        current_char = ''
+        while ptr != len(data):
+            current_char = data[ptr]
+            if current_char in digits:
+                temp_digits += current_char
+            else:
+                text += current_char * int(temp_digits)
+                temp_digits = ''
+            ptr += 1
+        return text
+            # if current_char == p:
+            #     if temp_chars != '':
+            #         num = temp_chars[:-1] * int(temp_chars[:-1])
+            #     temp_chars = ''
+
+
 
     def shennon_fano_decode(self, text: str) -> str:
         file_size = int(text[len(HeaderData.header):len(HeaderData.header) + 6], 16)
